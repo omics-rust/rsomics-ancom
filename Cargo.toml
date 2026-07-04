@@ -1,6 +1,6 @@
 [package]
 name = "rsomics-ancom"
-version = "0.1.0"
+version = "0.1.1"
 description = "ANCOM differential abundance (Mandal et al 2015) — scikit-bio skbio.stats.composition.ancom equivalent: per-feature W statistic from pairwise log-ratio one-way ANOVA, with the tau/theta detection cutoff"
 edition = "2024"
 rust-version = "1.91"

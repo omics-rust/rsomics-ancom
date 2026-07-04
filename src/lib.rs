@@ -42,8 +42,9 @@ pub struct AncomResult {
 /// are flagged significant.
 ///
 /// # Errors
-/// Non-positive counts (log undefined), out-of-range alpha/tau/theta, or a
-/// grouping that is all-distinct or single-group — all rejected as in skbio.
+/// Non-finite (NaN/inf) cells, non-positive counts (log undefined), out-of-range
+/// alpha/tau/theta, or a grouping that is all-distinct or single-group — all
+/// rejected as in skbio.
 pub fn ancom(
     table: &Table,
     grouping: &[String],
@@ -59,10 +60,17 @@ pub fn ancom(
             table.n_samples()
         )));
     }
+    // skbio checks finiteness before positivity, so a -inf cell is reported as
+    // infinite (not as a negative), and a NaN/inf anywhere pre-empts a zero.
+    if table.data.iter().any(|v| !v.is_finite()) {
+        return Err(RsomicsError::InvalidInput(
+            "input matrix cannot have infinite or NaN values".into(),
+        ));
+    }
     for &v in &table.data {
         if v <= 0.0 {
             return Err(RsomicsError::InvalidInput(
-                "table contains zero or negative values — add a pseudocount first (log undefined)"
+                "input matrix cannot have negative or zero components — add a pseudocount first (log undefined)"
                     .into(),
             ));
         }
@@ -314,5 +322,30 @@ mod tests {
     fn single_group_errors() {
         let g = vec!["x".to_string(); 6];
         assert!(ancom(&doc_table(), &g, 0.05, 0.02, 0.1, Correction::Holm).is_err());
+    }
+
+    fn ancom_err(cell: &str) -> String {
+        let txt = format!("\tf1\tf2\ns1\t{cell}\t5\ns2\t3\t2\n");
+        let t = Table::parse(txt.as_bytes(), '\t').unwrap();
+        let g = vec!["a".to_string(), "b".to_string()];
+        let Err(err) = ancom(&t, &g, 0.05, 0.02, 0.1, Correction::Holm) else {
+            panic!("expected an error for cell '{cell}'");
+        };
+        err.to_string()
+    }
+
+    #[test]
+    fn nan_cell_errors() {
+        assert!(ancom_err("nan").contains("infinite or NaN"));
+    }
+
+    #[test]
+    fn inf_cell_errors() {
+        assert!(ancom_err("inf").contains("infinite or NaN"));
+    }
+
+    #[test]
+    fn neg_inf_reported_as_infinite_not_negative() {
+        assert!(ancom_err("-inf").contains("infinite or NaN"));
     }
 }

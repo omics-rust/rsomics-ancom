@@ -88,6 +88,45 @@ fn committed_med_holm() {
     );
 }
 
+/// Run ours on a degenerate table and return (exit-success, stderr).
+fn ours_status(table: &str, groups: &str) -> (bool, String) {
+    let out = Command::new(ours_bin())
+        .arg(golden(table))
+        .args(["--grouping", &golden(groups)])
+        .output()
+        .expect("run rsomics-ancom");
+    (
+        out.status.success(),
+        String::from_utf8_lossy(&out.stderr).into_owned(),
+    )
+}
+
+/// skbio raises `ValueError: Input matrix cannot have infinite or NaN values.`
+/// on a NaN or inf cell; ours must fail loud (non-zero exit) rather than emit an
+/// all-W=0 table. The oracle raises on these same goldens (no result to diff).
+#[test]
+fn nan_cell_fails_loud() {
+    let (ok, err) = ours_status("nan_table.tsv", "degenerate_groups.tsv");
+    assert!(!ok, "NaN cell must be a non-zero exit");
+    assert!(err.contains("infinite or NaN"), "stderr: {err}");
+}
+
+#[test]
+fn inf_cell_fails_loud() {
+    let (ok, err) = ours_status("inf_table.tsv", "degenerate_groups.tsv");
+    assert!(!ok, "inf cell must be a non-zero exit");
+    assert!(err.contains("infinite or NaN"), "stderr: {err}");
+}
+
+/// skbio raises `Input matrix cannot have negative or zero components.` on a
+/// zero cell; ours matches with a non-zero exit.
+#[test]
+fn zero_cell_fails_loud() {
+    let (ok, err) = ours_status("zero_table.tsv", "degenerate_groups.tsv");
+    assert!(!ok, "zero cell must be a non-zero exit");
+    assert!(err.contains("negative or zero"), "stderr: {err}");
+}
+
 /// scikit-bio is the named oracle; loud-skip if it (or python) is unavailable.
 /// `RSOMICS_SKBIO_PYTHON` overrides the interpreter (e.g. an isolated venv).
 fn skbio_python() -> Option<String> {
