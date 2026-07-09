@@ -75,7 +75,9 @@ impl Tool for Cli {
         let grouping_reader = BufReader::new(File::open(&self.grouping).map_err(|e| {
             RsomicsError::InvalidInput(format!("{}: {e}", self.grouping.display()))
         })?);
-        let mut out: Box<dyn Write> = if self.output == "-" {
+        let mut out: Box<dyn Write> = if self.output == "-" && self.common.json {
+            Box::new(std::io::sink())
+        } else if self.output == "-" {
             Box::new(BufWriter::new(std::io::stdout().lock()))
         } else {
             Box::new(BufWriter::new(
